@@ -1,0 +1,520 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="description" content="Interactive map from flux space to the complex bias of an asymmetrically threaded SQUID (ATS).">
+<title>ATS Bias Explorer</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=STIX+Two+Text:ital,wght@0,400;0,600;1,400&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Mono:wght@400&display=swap">
+<style>
+/* Layout: control column beside two equal square plots (flux | bias); stacks on narrow screens. */
+:root {
+  --bg: #f5f6f8;
+  --panel: #ffffff;
+  --fg: #16181d;
+  --muted: #5b6270;
+  --line: #d9dde4;
+  --plot-bg: #ffffff;
+  --frame: #111318;
+  --grid: #d6dae2;
+  --annulus: #dcdfe5;
+  --accent: #1a59a6;
+  --steel: #1a59a6;
+  --crimson: #d4143b;
+  --orange: #ee8414;
+  --green: #17913c;
+  --teal: #008080;
+  --kerr: #6d717a;
+  --stab: #22239a;
+  --op1-fill: #3373f2;
+  --op1-edge: #0f1f73;
+  --op2-fill: #eb2626;
+  --op2-edge: #800000;
+  --warn: #a5420c;
+  --font-math: "STIX Two Text", "Times New Roman", Times, serif;
+  --font-ui: "IBM Plex Sans", "Segoe UI", system-ui, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, Menlo, monospace;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #111318; --panel: #191c22; --fg: #e8eaee; --muted: #9aa1ad; --line: #2c313a;
+    --plot-bg: #191c22; --frame: #e8eaee; --grid: #333944; --annulus: #2b3039;
+    --accent: #6fa3e8; --steel: #6fa3e8; --crimson: #ff5a72; --orange: #ffa54a; --green: #4cc76f;
+    --teal: #3cc4c4; --kerr: #a3a8b2; --stab: #9da2ff; --op1-fill: #5c8ff5; --op1-edge: #c9d6ff;
+    --op2-fill: #ff4a4a; --op2-edge: #ffd0d0; --warn: #f0a070; color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #111318; --panel: #191c22; --fg: #e8eaee; --muted: #9aa1ad; --line: #2c313a;
+  --plot-bg: #191c22; --frame: #e8eaee; --grid: #333944; --annulus: #2b3039;
+  --accent: #6fa3e8; --steel: #6fa3e8; --crimson: #ff5a72; --orange: #ffa54a; --green: #4cc76f;
+  --teal: #3cc4c4; --kerr: #a3a8b2; --stab: #9da2ff; --op1-fill: #5c8ff5; --op1-edge: #c9d6ff;
+  --op2-fill: #ff4a4a; --op2-edge: #ffd0d0; --warn: #f0a070; color-scheme: dark;
+}
+body { background: var(--bg); color: var(--fg); font-family: var(--font-ui); }
+.wrap { max-width: 1280px; margin: 0 auto; padding-block: 20px 32px;
+  padding-left: max(16px, env(safe-area-inset-left, 0px)); padding-right: max(16px, env(safe-area-inset-right, 0px)); }
+header { display: flex; flex-direction: column; gap: 4px; margin-bottom: 18px; }
+h1 { font-family: var(--font-math); font-weight: 600; font-size: 1.9rem; margin: 0; text-wrap: balance; letter-spacing: 0.01em; }
+.sub { color: var(--muted); font-size: 0.95rem; max-width: 72ch; line-height: 1.45; }
+.sub i { font-family: var(--font-math); font-size: 1.05em; }
+.layout { display: grid; grid-template-columns: 270px minmax(0, 1fr); gap: 20px; align-items: start; }
+@media (max-width: 900px) { .layout { grid-template-columns: minmax(0, 1fr); } }
+.controls { background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 16px; display: flex; flex-direction: column; gap: 16px; }
+.group { display: flex; flex-direction: column; gap: 10px; }
+.group[hidden] { display: none; }
+.group + .group { border-top: 1px solid var(--line); padding-top: 14px; }
+.glabel { font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.08em; color: var(--muted); font-weight: 600; }
+.seg { display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; }
+.seg button { font: inherit; font-size: 0.85rem; background: transparent; color: var(--fg); border: 0; padding: 7px 4px; cursor: pointer; font-family: var(--font-math); }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--panel); }
+.seg button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.seg.small button { font-size: 0.82rem; padding: 6px 2px; }
+.row { display: grid; grid-template-columns: 1fr auto; gap: 2px 8px; align-items: center; }
+.row label { font-family: var(--font-math); font-size: 1rem; }
+.row output { font-family: var(--font-mono); font-size: 0.8rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+.row input[type=range] { grid-column: 1 / -1; width: 100%; accent-color: var(--accent); margin: 0; }
+.check { display: flex; gap: 8px; align-items: center; font-size: 0.88rem; cursor: pointer; }
+.check input { accent-color: var(--accent); width: 16px; height: 16px; }
+.swatch { width: 14px; height: 3px; border-radius: 2px; display: inline-block; }
+.note { font-size: 0.8rem; color: var(--warn); line-height: 1.4; }
+.note[hidden] { display: none; }
+.readout { font-family: var(--font-mono); font-size: 0.78rem; color: var(--muted); line-height: 1.6; font-variant-numeric: tabular-nums; }
+.plots { display: flex; flex-wrap: wrap; gap: 16px; justify-content: center; min-width: 0; }
+.plot { background: var(--plot-bg); border: 1px solid var(--line); border-radius: 8px; padding: 6px; flex: 1 1 340px; max-width: 470px; min-width: 0; }
+.plot canvas { display: block; width: 100%; aspect-ratio: 1 / 1; max-width: 100%; }
+.legend { display: flex; flex-wrap: wrap; gap: 6px 16px; justify-content: center; margin-top: 14px; font-size: 0.85rem; color: var(--muted); }
+.legend span { display: inline-flex; align-items: center; gap: 6px; }
+.legend svg { overflow: visible; }
+[hidden] { display: none !important; }
+body { margin: 0; font-size: 14px; }
+</style>
+</head>
+<body>
+
+<div class="wrap">
+  <header>
+    <h1>ATS Bias Explorer</h1>
+    <p class="sub">Asymmetrically threaded SQUID: the flux point (<i>φ</i><sub>+</sub>, <i>φ</i><sub>−</sub>) on the left is mapped onto the complex bias <i>𝓑</i> = <i>B</i><sub>1</sub> + i<i>B</i><sub>2</sub> on the right. Move freely, or along the <i>g</i><sub>3</sub> = 0 and <i>g</i><sub>4</sub> = 0 paths.</p>
+  </header>
+
+  <div class="layout">
+    <aside class="controls" aria-label="Controls">
+      <div class="group">
+        <span class="glabel">Constraint</span>
+        <div class="seg" id="mode" role="group" aria-label="Constraint">
+          <button type="button" data-v="free" aria-pressed="true">free</button>
+          <button type="button" data-v="g3" aria-pressed="false">g₃ = 0</button>
+          <button type="button" data-v="g4" aria-pressed="false">g₄ = 0</button>
+        </div>
+      </div>
+
+      <div class="group">
+        <span class="glabel">Device</span>
+        <div class="row"><label for="zeta">ζ</label><output id="zetaOut"></output><input id="zeta" type="range" min="1" max="30" step="0.05" value="2"></div>
+        <div class="row"><label for="dpar">d</label><output id="dOut"></output><input id="dpar" type="range" min="-1" max="1" step="0.01" value="0.4"></div>
+        <div class="row"><label for="npar">n</label><output id="nOut"></output><input id="npar" type="range" min="2" max="6" step="1" value="3"></div>
+        <p class="note" id="clampNote" hidden></p>
+        <p class="note" id="stabNote" hidden></p>
+      </div>
+
+      <div class="group" id="grpFree">
+        <span class="glabel">Free motion</span>
+        <div class="row"><label for="php">φ₊</label><output id="phpOut"></output><input id="php" type="range" min="-4.712389" max="4.712389" step="0.01" value="0.5"></div>
+        <div class="row"><label for="phm">φ₋</label><output id="phmOut"></output><input id="phm" type="range" min="-4.712389" max="4.712389" step="0.01" value="0.3"></div>
+        <label class="check"><input id="showCirc" type="checkbox" checked> <span class="swatch" style="background:var(--orange)"></span> move φ₊ (circle)</label>
+        <label class="check"><input id="showEll" type="checkbox" checked> <span class="swatch" style="background:var(--green)"></span> move φ₋ (ellipse)</label>
+      </div>
+
+      <div class="group" id="grpG3" hidden>
+        <span class="glabel">Along g₃ = 0 &nbsp;(Φ = kπ)</span>
+        <div class="row"><label for="t3">φ₋</label><output id="t3Out"></output><input id="t3" type="range" min="-4.712389" max="4.712389" step="0.01" value="0.3"></div>
+        <span class="glabel" style="text-transform:none;letter-spacing:0">k &nbsp;(odd: B₁ &lt; 0, even: B₁ &gt; 0)</span>
+        <div class="seg small" id="kSel" role="group" aria-label="k"></div>
+      </div>
+
+      <div class="group" id="grpG4" hidden>
+        <span class="glabel">Along g₄ = 0</span>
+        <span class="glabel" style="text-transform:none;letter-spacing:0">loop centred at</span>
+        <div class="seg small" id="loopSel" role="group" aria-label="Loop">
+          <button type="button" data-v="0" aria-pressed="true">(π, 0)</button>
+          <button type="button" data-v="1" aria-pressed="false">(−π, 0)</button>
+          <button type="button" data-v="2" aria-pressed="false">(0, π)</button>
+          <button type="button" data-v="3" aria-pressed="false">(0, −π)</button>
+        </div>
+        <div class="row"><label for="tau">position on the loop</label><output id="tauOut"></output><input id="tau" type="range" min="0" max="2" step="0.002" value="0.5"></div>
+      </div>
+
+      <div class="group">
+        <span class="glabel">Current point</span>
+        <div class="readout" id="readout"></div>
+      </div>
+    </aside>
+
+    <section aria-label="Plots">
+      <div class="plots">
+        <div class="plot"><canvas id="cFlux" aria-label="Flux space"></canvas></div>
+        <div class="plot"><canvas id="cBias" aria-label="Bias space"></canvas></div>
+      </div>
+      <div class="legend">
+        <span><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="var(--steel)" stroke-width="3"/></svg>g₃ = 0</span>
+        <span><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="var(--crimson)" stroke-width="3"/></svg>g₄ = 0</span>
+        <span><svg width="14" height="14"><polygon points="7,1 13,7 7,13 1,7" fill="var(--op1-fill)" stroke="var(--op1-edge)" stroke-width="2"/></svg>OP.I</span>
+        <span><svg width="14" height="14"><circle cx="7" cy="7" r="5" fill="var(--op2-fill)" stroke="var(--op2-edge)" stroke-width="2.4"/></svg>OP.II</span>
+        <span><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="var(--kerr)" stroke-width="1.5" stroke-dasharray="4 3"/></svg>|𝓑| = 1/n³</span>
+        <span><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="var(--stab)" stroke-width="1.5" stroke-dasharray="4 3"/></svg>|𝓑| = 1/n</span>
+        <span><svg width="22" height="6"><line x1="0" y1="3" x2="22" y2="3" stroke="var(--teal)" stroke-width="2" stroke-dasharray="1 4" stroke-linecap="round"/></svg>g₂ = 0</span>
+      </div>
+    </section>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var PI = Math.PI, L = 1.5 * PI;
+  var $ = function (id) { return document.getElementById(id); };
+  var st = { mode: "free", k3: 1, loop: 0 };
+
+  // ---------- controls ----------
+  var kSel = $("kSel");
+  for (var k = -3; k <= 3; k++) {
+    var b = document.createElement("button");
+    b.type = "button"; b.dataset.v = String(k); b.textContent = String(k).replace("-", "−");
+    b.setAttribute("aria-pressed", k === 1 ? "true" : "false");
+    kSel.appendChild(b);
+  }
+  function wireSeg(el, key, parse) {
+    el.addEventListener("click", function (e) {
+      var t = e.target.closest("button"); if (!t) return;
+      st[key] = parse(t.dataset.v);
+      el.querySelectorAll("button").forEach(function (x) { x.setAttribute("aria-pressed", x === t ? "true" : "false"); });
+      update();
+    });
+  }
+  wireSeg($("mode"), "mode", String);
+  wireSeg(kSel, "k3", Number);
+  wireSeg($("loopSel"), "loop", Number);
+  ["zeta", "dpar", "npar", "php", "phm", "t3", "tau", "showCirc", "showEll"].forEach(function (id) {
+    $(id).addEventListener("input", update);
+  });
+
+  // ---------- physics (port of the Mathematica Manipulate) ----------
+  function compute() {
+    var n = +$("npar").value, d = +$("dpar").value, zeta = +$("zeta").value;
+    var n3 = Math.pow(n, 3), n6 = n3 * n3;
+    var dEff = Math.abs(d) < 1e-6 ? 1e-6 : d;
+    var d2S = Math.max(1 - dEff * dEff, 1e-6);
+    var zMax = Math.max(1, Math.min((1 - 1e-4) / Math.abs(dEff), n3));
+    var zc = Math.min(Math.max(zeta, 1), zMax);
+    var am = zc / n3, Ep = am, Em = dEff * am, rIn = Math.abs(dEff) * am;
+
+    function Bof(fp, fm) {
+      return [Ep * Math.cos(fp) * Math.cos(fm) - Em * Math.sin(fp) * Math.sin(fm),
+              Ep * Math.sin(fp) * Math.cos(fm) + Em * Math.cos(fp) * Math.sin(fm)];
+    }
+    function Bj(c, j) {
+      var p = Math.pow(n, 1 - j), cn = Math.cos(c / n), sn = Math.sin(c / n);
+      return [-p * Math.cos(c) * cn - Math.sin(c) * sn, -p * Math.sin(c) * cn + Math.cos(c) * sn];
+    }
+    function alphaJ(c, j) {
+      var sn = Math.sin(c / n), cn = Math.cos(c / n);
+      return Math.sqrt(sn * sn + Math.pow(n, 2 * (1 - j)) * cn * cn);
+    }
+    function solveChiFor(j, target) {
+      var lo = 1e-6, hi = n * PI / 2 - 1e-6;
+      if (alphaJ(lo, j) >= target) return lo;
+      if (alphaJ(hi, j) <= target) return hi;
+      for (var i = 0; i < 50; i++) { var mid = (lo + hi) / 2; if (alphaJ(mid, j) < target) lo = mid; else hi = mid; }
+      return (lo + hi) / 2;
+    }
+    var chiMax4 = solveChiFor(4, am), chiMax2 = solveChiFor(2, am);
+    var step = Math.max(chiMax4, 1e-3) / 120;
+
+    var eo = Math.sqrt((zc * zc - 1) / (n6 - 1));
+    var ee = Math.sqrt(Math.max(n6 - zc * zc, 0) / (n6 - 1)) / n3;
+    var deltaII = n * Math.atan2(eo, n3 * ee) - Math.atan2(eo, ee);
+    var cI = Math.sqrt(Math.max(1 - dEff * dEff * zc * zc, 0)), sI = Math.sqrt(zc * zc - 1);
+    var phiIa = Math.atan2(sI, cI), phiIb = Math.atan2(dEff * sI, cI);
+    var existsA = zc * Math.abs(dEff) <= 1;
+    var fullyStable = zc < n * n;
+    var centers = [[PI, 0], [-PI, 0], [0, PI], [0, -PI]];
+
+    function loopPoint(c, sg, ctr) {
+      var B = Bj(c, 4), R = n3 * Math.hypot(B[0], B[1]) / zc;
+      var s = Math.sqrt(Math.min(Math.max((1 - R * R) / d2S, 0), 1));
+      var fm = ctr[1] + sg * Math.asin(s);
+      var th = Math.atan2(dEff * Math.sin(fm), Math.cos(fm));
+      var fp = Math.atan2(B[1], B[0]) - th;
+      fp += 2 * PI * Math.round((ctr[0] - fp) / (2 * PI));
+      return [fp, fm];
+    }
+    function loopPts(ctr) {
+      var pts = [], c;
+      for (c = -chiMax4; c <= chiMax4 + 1e-12; c += step) pts.push(loopPoint(c, 1, ctr));
+      for (c = chiMax4; c >= -chiMax4 - 1e-12; c -= step) pts.push(loopPoint(c, -1, ctr));
+      pts.push(loopPoint(-chiMax4, 1, ctr));
+      return pts;
+    }
+    // continuous theta(phi-), theta(0) = 0
+    function thC(t) {
+      var ad = Math.abs(dEff), s = Math.sin(t), c = Math.cos(t);
+      return Math.sign(dEff) * (t + Math.atan2((ad - 1) * s * c, c * c + ad * s * s));
+    }
+
+    var opII = [], opI = [];
+    centers.forEach(function (ctr) {
+      opII.push([ctr[0] + deltaII, ctr[1]], [ctr[0] - deltaII, ctr[1]]);
+      if (existsA) opI.push([ctr[0] - phiIb, ctr[1] + phiIa], [ctr[0] + phiIb, ctr[1] - phiIa]);
+    });
+
+    var fpP, fmP, BP, chiNow = null, mode = st.mode;
+    if (mode === "free") {
+      fpP = +$("php").value; fmP = +$("phm").value; BP = Bof(fpP, fmP);
+    } else if (mode === "g3") {
+      fmP = +$("t3").value; fpP = st.k3 * PI - thC(fmP); BP = Bof(fpP, fmP);
+    } else {
+      var tau = +$("tau").value, cL, sg;
+      if (tau <= 1) { cL = -chiMax4 + 2 * chiMax4 * tau; sg = 1; } else { cL = chiMax4 - 2 * chiMax4 * (tau - 1); sg = -1; }
+      var pp = loopPoint(cL, sg, centers[st.loop]); fpP = pp[0]; fmP = pp[1]; BP = Bj(cL, 4); chiNow = cL;
+    }
+
+    return { n: n, n3: n3, d: d, dEff: dEff, zeta: zeta, zc: zc, zMax: zMax, am: am, rIn: rIn,
+      Bof: Bof, Bj: Bj, thC: thC, loopPts: loopPts, centers: centers, chiMax4: chiMax4, chiMax2: chiMax2,
+      step: step, opI: opI, opII: opII, existsA: existsA, fullyStable: fullyStable,
+      puntoA: [-1 / n3, 0], puntiB: chiMax4 > 1e-4 ? [Bj(chiMax4, 4), Bj(-chiMax4, 4)] : [],
+      fpP: fpP, fmP: fmP, BP: BP, chiNow: chiNow, mode: mode };
+  }
+
+  // ---------- drawing ----------
+  var PAD = { l: 78, r: 16, t: 34, b: 66 };
+  function tok(name) { return getComputedStyle(document.documentElement).getPropertyValue(name).trim(); }
+
+  function setupCanvas(cv) {
+    var dpr = window.devicePixelRatio || 1, w = cv.clientWidth;
+    if (cv.width !== Math.round(w * dpr)) { cv.width = Math.round(w * dpr); cv.height = Math.round(w * dpr); }
+    var ctx = cv.getContext("2d");
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, w, w);
+    var s = Math.min(1, w / 470);           // shrink padding/text slightly on phones
+    var pad = { l: PAD.l * s + 10 * (1 - s), r: PAD.r * s, t: PAD.t * s + 6 * (1 - s), b: PAD.b * s + 8 * (1 - s) };
+    return { ctx: ctx, w: w, s: s, pad: pad, pw: w - pad.l - pad.r, ph: w - pad.t - pad.b };
+  }
+  function mapper(g, xr, yr) {
+    return function (x, y) {
+      return [g.pad.l + (x - xr[0]) / (xr[1] - xr[0]) * g.pw, g.pad.t + (1 - (y - yr[0]) / (yr[1] - yr[0])) * g.ph];
+    };
+  }
+  function styleLine(ctx, color, kind, s) {
+    ctx.strokeStyle = color; ctx.setLineDash([]); ctx.globalAlpha = 1; ctx.lineCap = "butt"; ctx.lineJoin = "round";
+    if (kind === "sel") { ctx.lineWidth = 3; }
+    else if (kind === "uns") { ctx.lineWidth = 1.2; ctx.globalAlpha = 0.5; ctx.setLineDash([5, 4]); }
+    else if (kind === "traj") { ctx.lineWidth = 2.5; }
+    else if (kind === "thin-dash") { ctx.lineWidth = 1.5; ctx.setLineDash([5, 4]); }
+    else if (kind === "dot") { ctx.lineWidth = 2; ctx.setLineDash([0.5, 4.5]); ctx.lineCap = "round"; }
+  }
+  function polyline(ctx, M, pts) {
+    ctx.beginPath();
+    var started = false;
+    for (var i = 0; i < pts.length; i++) {
+      var p = M(pts[i][0], pts[i][1]);
+      if (!isFinite(p[0]) || !isFinite(p[1])) { started = false; continue; }
+      if (!started) { ctx.moveTo(p[0], p[1]); started = true; } else ctx.lineTo(p[0], p[1]);
+    }
+    ctx.stroke();
+  }
+  function diamond(ctx, p) {
+    ctx.setLineDash([]); ctx.globalAlpha = 1;
+    ctx.beginPath(); ctx.moveTo(p[0], p[1] - 7); ctx.lineTo(p[0] + 7, p[1]); ctx.lineTo(p[0], p[1] + 7); ctx.lineTo(p[0] - 7, p[1]); ctx.closePath();
+    ctx.fillStyle = tok("--op1-fill"); ctx.fill(); ctx.lineWidth = 2.3; ctx.strokeStyle = tok("--op1-edge"); ctx.stroke();
+  }
+  function circleMark(ctx, p) {
+    ctx.setLineDash([]); ctx.globalAlpha = 1;
+    ctx.beginPath(); ctx.arc(p[0], p[1], 6.25, 0, 2 * PI); ctx.fillStyle = tok("--op2-edge"); ctx.fill();
+    ctx.beginPath(); ctx.arc(p[0], p[1], 3.75, 0, 2 * PI); ctx.fillStyle = tok("--op2-fill"); ctx.fill();
+  }
+  function current(ctx, p) {
+    ctx.setLineDash([]); ctx.globalAlpha = 1;
+    ctx.beginPath(); ctx.arc(p[0], p[1], 6, 0, 2 * PI); ctx.fillStyle = tok("--frame"); ctx.fill();
+    ctx.beginPath(); ctx.arc(p[0], p[1], 3, 0, 2 * PI); ctx.fillStyle = tok("--plot-bg"); ctx.fill();
+  }
+  function inBox(p, g) {
+    return p[0] >= g.pad.l - 1 && p[0] <= g.pad.l + g.pw + 1 && p[1] >= g.pad.t - 1 && p[1] <= g.pad.t + g.ph + 1;
+  }
+  // subscript-aware label: parts = [[text, sub?], ...]
+  function richText(ctx, parts, x, y, size, align) {
+    var widths = parts.map(function (q) { ctx.font = (q[1] ? 0.7 * size : size) + "px " + tok("--font-math"); return ctx.measureText(q[0]).width; });
+    var total = widths.reduce(function (a, b) { return a + b; }, 0);
+    var cx = align === "center" ? x - total / 2 : x;
+    ctx.textAlign = "left"; ctx.textBaseline = "alphabetic";
+    parts.forEach(function (q, i) {
+      ctx.font = (q[1] ? 0.7 * size : size) + "px " + tok("--font-math");
+      ctx.fillText(q[0], cx, y + (q[1] ? 0.28 * size : 0)); cx += widths[i];
+    });
+  }
+  function frameAndTicks(g, M, xt, yt, xlab, ylab, title) {
+    var ctx = g.ctx, fs = Math.round(15 * (0.8 + 0.2 * g.s)), ls = Math.round(17 * (0.8 + 0.2 * g.s));
+    ctx.globalAlpha = 1; ctx.setLineDash([]);
+    ctx.strokeStyle = tok("--frame"); ctx.fillStyle = tok("--frame"); ctx.lineWidth = 1.6;
+    ctx.strokeRect(g.pad.l, g.pad.t, g.pw, g.ph);
+    ctx.lineWidth = 1.2; ctx.font = fs + "px " + tok("--font-math");
+    xt.forEach(function (t) {
+      var p = M(t[0], 0); ctx.beginPath();
+      ctx.moveTo(p[0], g.pad.t + g.ph); ctx.lineTo(p[0], g.pad.t + g.ph - 6);
+      ctx.moveTo(p[0], g.pad.t); ctx.lineTo(p[0], g.pad.t + 4); ctx.stroke();
+      ctx.textAlign = "center"; ctx.textBaseline = "top"; ctx.fillText(t[1], p[0], g.pad.t + g.ph + 6);
+    });
+    yt.forEach(function (t) {
+      var p = M(0, t[0]); ctx.beginPath();
+      ctx.moveTo(g.pad.l, p[1]); ctx.lineTo(g.pad.l + 6, p[1]);
+      ctx.moveTo(g.pad.l + g.pw, p[1]); ctx.lineTo(g.pad.l + g.pw - 4, p[1]); ctx.stroke();
+      ctx.textAlign = "right"; ctx.textBaseline = "middle"; ctx.fillText(t[1], g.pad.l - 7, p[1]);
+    });
+    richText(ctx, xlab, g.pad.l + g.pw / 2, g.w - 12 * g.s - 4, ls, "center");
+    ctx.save(); ctx.translate(16 + 2 * g.s, g.pad.t + g.ph / 2); ctx.rotate(-PI / 2);
+    richText(ctx, ylab, 0, 0, ls, "center"); ctx.restore();
+    ctx.font = (ls) + "px " + tok("--font-math"); ctx.textAlign = "center"; ctx.textBaseline = "alphabetic";
+    ctx.fillText(title, g.pad.l + g.pw / 2, g.pad.t - 10);
+  }
+
+  function drawFlux(S) {
+    var g = setupCanvas($("cFlux")), ctx = g.ctx, M = mapper(g, [-L, L], [-L, L]);
+    ctx.fillStyle = tok("--plot-bg"); ctx.fillRect(0, 0, g.w, g.w);
+    ctx.save(); ctx.beginPath(); ctx.rect(g.pad.l, g.pad.t, g.pw, g.ph); ctx.clip();
+    // grid
+    ctx.strokeStyle = tok("--grid"); ctx.lineWidth = 1; ctx.setLineDash([4, 4]);
+    [-PI, 0, PI].forEach(function (v) {
+      var a = M(v, -L), b = M(v, L); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+      a = M(-L, v); b = M(L, v); ctx.beginPath(); ctx.moveTo(a[0], a[1]); ctx.lineTo(b[0], b[1]); ctx.stroke();
+    });
+    var steel = tok("--steel"), crim = tok("--crimson");
+    // g3 = 0 lines: phi+ = k pi - theta(phi-)
+    var ts = []; for (var t = -L - 0.05; t <= L + 0.05; t += L / 300) ts.push(t);
+    for (var k = -4; k <= 4; k++) {
+      if (S.mode === "g3" && k === S.k3) continue;
+      styleLine(ctx, steel, "uns"); polyline(ctx, M, ts.map(function (y) { return [k * PI - S.thC(y), y]; }));
+    }
+    // g4 = 0 loops
+    S.centers.forEach(function (ctr, i) {
+      if (S.mode === "g4" && i === st.loop) return;
+      styleLine(ctx, crim, "uns"); polyline(ctx, M, S.loopPts(ctr));
+    });
+    if (S.mode === "g3") { styleLine(ctx, steel, "sel"); polyline(ctx, M, ts.map(function (y) { return [S.k3 * PI - S.thC(y), y]; })); }
+    if (S.mode === "g4") { styleLine(ctx, crim, "sel"); polyline(ctx, M, S.loopPts(S.centers[st.loop])); }
+    // free-motion lines
+    if (S.mode === "free") {
+      if ($("showCirc").checked) { styleLine(ctx, tok("--orange"), "traj"); polyline(ctx, M, [[-L, S.fmP], [L, S.fmP]]); }
+      if ($("showEll").checked) { styleLine(ctx, tok("--green"), "traj"); polyline(ctx, M, [[S.fpP, -L], [S.fpP, L]]); }
+    }
+    ctx.restore();
+    S.opI.forEach(function (p) { var q = M(p[0], p[1]); if (inBox(q, g)) diamond(ctx, q); });
+    S.opII.forEach(function (p) { var q = M(p[0], p[1]); if (inBox(q, g)) circleMark(ctx, q); });
+    var cp = M(S.fpP, S.fmP); if (inBox(cp, g)) current(ctx, cp);
+    var piT = [[-1.5, "−1.5"], [-1, "−1"], [-0.5, "−0.5"], [0, "0"], [0.5, "0.5"], [1, "1"], [1.5, "1.5"]].map(function (q) { return [q[0] * PI, q[1]]; });
+    frameAndTicks(g, M, piT, piT, [["φ", 0], ["+", 1], ["  (in units of π)", 0]], [["φ", 0], ["−", 1], ["  (in units of π)", 0]], "Flux space");
+  }
+
+  function niceTicks(lo, hi) {
+    var span = hi - lo, raw = span / 5, mag = Math.pow(10, Math.floor(Math.log10(raw))), r = raw / mag;
+    var st = (r < 1.5 ? 1 : r < 3.5 ? 2 : r < 7.5 ? 5 : 10) * mag, out = [];
+    for (var v = Math.ceil(lo / st) * st; v <= hi + 1e-12; v += st) {
+      var dec = Math.max(0, -Math.floor(Math.log10(st)));
+      var lbl = Math.abs(v) < st / 1e6 ? "0" : v.toFixed(dec).replace("-", "−");
+      out.push([v, lbl]);
+    }
+    return out;
+  }
+
+  function drawBias(S) {
+    var g = setupCanvas($("cBias")), ctx = g.ctx, R = 1.3 * S.am, M = mapper(g, [-R, R], [-R, R]);
+    var sc = g.pw / (2 * R);
+    ctx.fillStyle = tok("--plot-bg"); ctx.fillRect(0, 0, g.w, g.w);
+    ctx.save(); ctx.beginPath(); ctx.rect(g.pad.l, g.pad.t, g.pw, g.ph); ctx.clip();
+    var o = M(0, 0);
+    // annulus
+    ctx.globalAlpha = 1; ctx.setLineDash([]);
+    ctx.beginPath(); ctx.arc(o[0], o[1], S.am * sc, 0, 2 * PI); ctx.arc(o[0], o[1], S.rIn * sc, 0, 2 * PI, true);
+    ctx.fillStyle = tok("--annulus"); ctx.fill("evenodd");
+    // reference circles
+    styleLine(ctx, tok("--kerr"), "thin-dash"); ctx.beginPath(); ctx.arc(o[0], o[1], sc / S.n3, 0, 2 * PI); ctx.stroke();
+    styleLine(ctx, tok("--stab"), "thin-dash"); ctx.beginPath(); ctx.arc(o[0], o[1], sc / S.n, 0, 2 * PI); ctx.stroke();
+    // g3 = 0 on the real axis
+    var steel = tok("--steel"), odd = Math.abs(S.k3 % 2) === 1;
+    styleLine(ctx, steel, S.mode === "g3" && odd ? "sel" : "uns"); polyline(ctx, M, [[-S.am, 0], [-S.rIn, 0]]);
+    styleLine(ctx, steel, S.mode === "g3" && !odd ? "sel" : "uns"); polyline(ctx, M, [[S.rIn, 0], [S.am, 0]]);
+    // g4 = 0 arc
+    var arc = []; for (var c = -S.chiMax4; c <= S.chiMax4 + 1e-12; c += S.step) arc.push(S.Bj(c, 4));
+    arc.push(S.Bj(S.chiMax4, 4));
+    styleLine(ctx, tok("--crimson"), S.mode === "g4" ? "sel" : "uns"); polyline(ctx, M, arc);
+    // g2 = 0 (only when single-well is not guaranteed)
+    if (!S.fullyStable && S.chiMax2 > 1e-4) {
+      var a2 = [], st2 = Math.max(S.chiMax2, 1e-3) / 120;
+      for (c = -S.chiMax2; c <= S.chiMax2 + 1e-12; c += st2) a2.push(S.Bj(c, 2));
+      styleLine(ctx, tok("--teal"), "dot"); polyline(ctx, M, a2);
+    }
+    // free-motion trajectories
+    if (S.mode === "free") {
+      if ($("showCirc").checked) {
+        styleLine(ctx, tok("--orange"), "traj"); ctx.beginPath(); ctx.arc(o[0], o[1], Math.hypot(S.BP[0], S.BP[1]) * sc, 0, 2 * PI); ctx.stroke();
+      }
+      if ($("showEll").checked) {
+        var el = []; for (var t = -PI; t <= PI + 1e-9; t += PI / 180) el.push(S.Bof(S.fpP, t));
+        styleLine(ctx, tok("--green"), "traj"); polyline(ctx, M, el);
+      }
+    }
+    ctx.restore();
+    if (S.existsA) diamond(ctx, M(S.puntoA[0], S.puntoA[1]));
+    S.puntiB.forEach(function (p) { circleMark(ctx, M(p[0], p[1])); });
+    var cp = M(S.BP[0], S.BP[1]); if (inBox(cp, g)) current(ctx, cp);
+    var tk = niceTicks(-R, R);
+    frameAndTicks(g, M, tk, tk, [["B", 0], ["1", 1]], [["B", 0], ["2", 1]], "Bias space");
+  }
+
+  // ---------- text ----------
+  function fmt(x, dgt) { return (x < 0 ? "−" : "") + Math.abs(x).toFixed(dgt); }
+  function update() {
+    ["grpFree", "grpG3", "grpG4"].forEach(function (id) {
+      $(id).hidden = !((id === "grpFree" && st.mode === "free") || (id === "grpG3" && st.mode === "g3") || (id === "grpG4" && st.mode === "g4"));
+    });
+    var S = compute(); S.k3 = st.k3;
+    $("zetaOut").textContent = fmt(+$("zeta").value, 2);
+    $("dOut").textContent = fmt(+$("dpar").value, 2);
+    $("nOut").textContent = $("npar").value;
+    $("phpOut").textContent = fmt(+$("php").value / PI, 3) + " π";
+    $("phmOut").textContent = fmt(+$("phm").value / PI, 3) + " π";
+    $("t3Out").textContent = fmt(+$("t3").value / PI, 3) + " π";
+    $("tauOut").textContent = fmt(+$("tau").value, 3);
+    var cn = $("clampNote");
+    if (S.zeta > S.zMax + 1e-9) {
+      cn.hidden = false;
+      cn.textContent = "ζ is limited to min(1/|d|, n³) = " + S.zMax.toFixed(3) + " so that the g₄ = 0 paths stay closed. Plots use ζ = " + S.zc.toFixed(3) + ".";
+    } else cn.hidden = true;
+    var sn = $("stabNote");
+    sn.hidden = S.fullyStable;
+    sn.textContent = "ζ ≥ n²: the potential is not single-well everywhere. The dotted teal curve marks g₂ = 0.";
+    var lines = [
+      "B₁ = " + fmt(S.BP[0], 4) + "   B₂ = " + fmt(S.BP[1], 4),
+      "|𝓑| = α = " + fmt(Math.hypot(S.BP[0], S.BP[1]), 4),
+      "φ₊ = " + fmt(S.fpP / PI, 3) + " π   φ₋ = " + fmt(S.fmP / PI, 3) + " π"
+    ];
+    if (S.mode === "g4") lines.push("χ = φₘ = " + fmt(S.chiNow, 3));
+    $("readout").innerHTML = lines.join("<br>");
+    drawFlux(S); drawBias(S);
+  }
+
+  var raf = 0;
+  function schedule() { cancelAnimationFrame(raf); raf = requestAnimationFrame(update); }
+  window.addEventListener("resize", schedule);
+  if (window.ResizeObserver) new ResizeObserver(schedule).observe($("cFlux"));
+  try { window.matchMedia("(prefers-color-scheme: dark)").addEventListener("change", schedule); } catch (e) {}
+  new MutationObserver(schedule).observe(document.documentElement, { attributes: true, attributeFilter: ["data-theme"] });
+  update();
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(schedule);
+})();
+</script>
+
+</body>
+</html>
